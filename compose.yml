@@ -1,0 +1,18 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:cached
+      - uv-cache:/root/.cache/uv
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    command: sleep infinity
+
+volumes:
+  uv-cache:
