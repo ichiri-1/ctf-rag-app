@@ -11,3 +11,4 @@ __pycache__/
 data/index.json
 .claude/settings.local.json
 .vscode/
+data/chroma/

@@ -4,14 +4,22 @@
   "service": "app",
   "workspaceFolder": "/workspace",
   "forwardPorts": [8000],
-  "postCreateCommand": "uv sync --dev",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    }
+  },
+  "postCreateCommand": "uv sync --dev && npm install -g @anthropic-ai/claude-code",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
         "ms-azuretools.vscode-docker",
-        "charliermarsh.ruff"
+        "charliermarsh.ruff",
+        "anthropic.claude-code"
       ]
     }
   }

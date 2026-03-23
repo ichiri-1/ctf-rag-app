@@ -1,19 +1,19 @@
 .PHONY: sync lock run test lint format
 
 sync:
-uv sync --dev
+	uv sync --dev
 
 lock:
-uv lock
+	uv lock
 
 run:
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+	uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 test:
-uv run pytest
+	uv run pytest
 
 lint:
-uv run ruff check .
+	uv run ruff check .
 
 format:
-uv run ruff check . --fix
+	uv run ruff check . --fix
