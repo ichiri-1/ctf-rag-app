@@ -109,6 +109,19 @@ uv run ruff check . --fix
 make format
 ```
 
+## テスト
+
+テストはアプリを起動せずに実行可能
+ChromaDB のデータはテストごとに一時ディレクトリに保存され、終了後に自動削除される
+
+| テストファイル | 内容 |
+|---|---|
+| `tests/test_health.py` | `/health` が正常に応答するか |
+| `tests/test_ingest.py` | `/ingest` でチャンクが登録されるか |
+| `tests/test_query.py` | `/query` で正しいチャンクが返ってくるか |
+
+`tests/conftest.py` の `client` フィクスチャが一時ディレクトリの設定を担当
+
 ## ディレクトリ構成
 
 ```
@@ -119,6 +132,11 @@ make format
 │   └── settings.py   # 環境変数による設定管理
 ├── data/
 │   └── chroma/       # ChromaDB の永続化ディレクトリ（.gitignore 対象）
+├── tests/
+│   ├── conftest.py       # テスト用フィクスチャ（一時 ChromaDB の設定）
+│   ├── test_health.py    # /health のテスト
+│   ├── test_ingest.py    # /ingest のテスト
+│   └── test_query.py     # /query のテスト
 ├── .devcontainer/    # Dev Container 設定
 ├── .env.example      # 環境変数のテンプレート
 ├── compose.yml       # Docker Compose 設定
