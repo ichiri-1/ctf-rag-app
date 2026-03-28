@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -17,10 +19,11 @@ def test_query(client) -> None:
         ]
     })
 
-    response = client.post("/query", json={
-        "question": "FastAPIとは何ですか？",
-        "top_k": 1
-    })
+    with patch("app.main.generate_ans_openai", return_value="モック回答"):
+        response = client.post("/query", json={
+            "question": "FastAPIとは何ですか？",
+            "top_k": 1
+        })
 
     assert response.status_code == 200
     body = response.json()
