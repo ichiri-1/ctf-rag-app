@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import SecretStr
 
 
 class Settings(BaseSettings):
@@ -9,6 +10,7 @@ class Settings(BaseSettings):
     chroma_collection: str = "documents"
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     generation_model: str = "cyberagent/open-calm-small"
+    openai_api_key: SecretStr = SecretStr("")
     max_new_tokens: int = 80
     repetition_penalty: float = 1.15
     no_repeat_ngram: int = 3

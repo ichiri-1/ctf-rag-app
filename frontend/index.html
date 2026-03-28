@@ -1,0 +1,36 @@
+<!-- 登録フォーム -->
+<!DOCTYPE html>
+<html lang="ja">
+    <head>
+        <meta charset="UTF-8" />
+        <title>RAG デモ</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+
+        <h1>RAG デモ</h1>
+
+        <!-- 文書登録フォーム -->
+        <section>
+            <h2>文書を登録する</h2>
+            <form id="ingest-form">
+                <label>ID  <input type="text" id="doc-id" required /></label>
+                <label>テキスト <textarea id="doc-text" required></textarea></label>
+                <button type="submit">登録</button>
+            </form>
+            <p id="ingest-result"></p>
+        </section>
+
+        <!-- 質問フォーム -->
+        <section>
+            <h2>質問する</h2>
+            <form id="query-form">
+                <label>質問 <input type="text" id="question" required /></label>
+                <button type="submit">送信</button>
+            </form>
+            <div id="answer"></div>
+        </section>
+
+        <script type="module" src="main.js"></script>
+    </body>
+</html>

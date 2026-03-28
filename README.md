@@ -9,8 +9,9 @@
 |---|---|
 | API | FastAPI |
 | 埋め込みモデル | `sentence-transformers/all-MiniLM-L6-v2` |
-| 生成モデル | `cyberagent/open-calm-small` |
+| 生成モデル | `cyberagent/open-calm-small`（ローカル）/ OpenAI API |
 | ベクトル DB | ChromaDB（ローカルファイル永続化） |
+| フロントエンド | HTML + CSS + TypeScript（フレームワークなし） |
 | 依存管理 | uv |
 | 開発環境 | Dev Container + Docker Compose |
 
@@ -40,7 +41,8 @@ cp .env.example .env
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-起動後、`http://localhost:8000/docs` で Swagger UI を確認
+起動後、`http://localhost:8000` でフロントエンド UI を確認
+`http://localhost:8000/docs` で Swagger UI を確認
 
 ## API の使い方
 
@@ -78,7 +80,7 @@ curl -X POST http://localhost:8000/query \
 ```
 
 レスポンスの `sources` フィールドに検索で取得したチャンクが含まれる
-`answer` フィールドはローカル生成モデルによる回答（モデルが小さいため精度は低め）
+`answer` フィールドは生成モデルによる回答（`OPENAI_API_KEY` が設定されている場合は OpenAI API を使用）
 
 ## 開発コマンド例（uv と Makefile を使う2種類どっちでも）
 
@@ -132,6 +134,11 @@ ChromaDB のデータはテストごとに一時ディレクトリに保存さ�
 │   └── settings.py   # 環境変数による設定管理
 ├── data/
 │   └── chroma/       # ChromaDB の永続化ディレクトリ（.gitignore 対象）
+├── frontend/
+│   ├── index.html    # UI
+│   ├── style.css     # スタイル
+│   ├── main.ts       # TypeScript ソース
+│   └── main.js       # ビルド成果物（.gitignore 対象）
 ├── tests/
 │   ├── conftest.py       # テスト用フィクスチャ（一時 ChromaDB の設定）
 │   ├── test_health.py    # /health のテスト
@@ -150,8 +157,18 @@ ChromaDB のデータはテストごとに一時ディレクトリに保存さ�
 
 | 変数名 | デフォルト値 | 説明 |
 |---|---|---|
+| `OPENAI_API_KEY` | （なし） | OpenAI API キー（設定すると OpenAI API で生成） |
 | `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | 埋め込みモデル |
-| `GENERATION_MODEL` | `cyberagent/open-calm-small` | 生成モデル |
+| `GENERATION_MODEL` | `cyberagent/open-calm-small` | ローカル生成モデル |
 | `APP_DATA_DIR` | `data` | データ保存ディレクトリ |
 | `MAX_NEW_TOKENS` | `160` | 生成トークンの最大数 |
 | `RETRIEVAL_TOP_K` | `3` | 検索で返すチャンク数 |
+
+## フロントエンドのビルド
+
+TypeScript を編集した場合は再ビルドが必要
+
+```bash
+cd frontend
+npx tsc
+```

@@ -5,8 +5,10 @@ from typing import Any
 
 import torch
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from openai import OpenAI
 
 from app.rag import ingest_documents, retrieve
 from app.settings import settings
@@ -126,6 +128,21 @@ def generate_answer(question: str, results: list[dict[str, Any]]) -> str:
 
     return answer
 
+def generate_ans_openai(question: str, results: list[dict[str, Any]]) -> str:
+    if not results:
+        return fallback_answer(question, results)
+    
+    context = build_context(results)
+    client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "以下の文書だけを根拠に日本語で簡潔に答えてください。"},
+            {"role": "user", "content": f"文書:\n{context}\n\n質問:\n{question}"},
+        ],
+    )
+    return response.choices[0].message.content or ""
 
 @app.get("/health")
 def health() -> dict[str, str]:
@@ -142,8 +159,11 @@ def ingest(payload: IngestRequest) -> dict[str, int]:
 def query(payload: QueryRequest) -> dict[str, Any]:
     top_k = payload.top_k or settings.retrieval_top_k
     results = retrieve(payload.question, top_k)
-    answer = generate_answer(payload.question, results)
+    # answer = generate_answer(payload.question, results)
+    answer = generate_ans_openai(payload.question, results)
     return {
         "answer": answer,
         "sources": results,
     }
+
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
