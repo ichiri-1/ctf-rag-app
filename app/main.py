@@ -6,9 +6,9 @@ from typing import Any
 import torch
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from openai import OpenAI
 from pydantic import BaseModel, Field
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from openai import OpenAI
 
 from app.rag import ingest_documents, retrieve
 from app.settings import settings
