@@ -10,12 +10,28 @@
 
         <h1>RAG デモ</h1>
 
+        <!-- PDF 登録フォーム -->
+        <section>
+            <h2>PDF を登録する</h2>
+            <form id="upload-form">
+                <input type="file" id="pdf-file" accept=".pdf" required />
+                <label>タイトル <input type="text" id="pdf-title" /></label>
+                <label>著者 <input type="text" id="pdf-authors" /></label>
+                <label>出版年 <input type="number" id="pdf-year" /></label>
+                <button type="submit">アップロード</button>
+            </form>
+            <p id="upload-result"></p>
+        </section>
+
         <!-- 文書登録フォーム -->
         <section>
             <h2>文書を登録する</h2>
             <form id="ingest-form">
                 <label>ID  <input type="text" id="doc-id" required /></label>
                 <label>テキスト <textarea id="doc-text" required></textarea></label>
+                <label>タイトル <input type="text" id="doc-title" /></label>
+                <label>著者 <input type="text" id="doc-authors" /></label>
+                <label>出版年 <input type="number" id="doc-year" /></label>
                 <button type="submit">登録</button>
             </form>
             <p id="ingest-result"></p>

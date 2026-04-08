@@ -3,8 +3,9 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
+import pypdf
 import torch
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -18,6 +19,10 @@ app = FastAPI(title="paper-rag-template", version="0.1.0")
 class DocumentIn(BaseModel):
     id: str = Field(..., description="Document identifier")
     text: str = Field(..., description="Raw document text")
+
+    title: str = Field(default="", description="論文タイトル")
+    authors: str = Field(default="", description="著者名")
+    year: int | None = Field(default=None, description="出版年")
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -151,7 +156,16 @@ def health() -> dict[str, str]:
 
 @app.post("/ingest")
 def ingest(payload: IngestRequest) -> dict[str, int]:
-    docs = [doc.model_dump() for doc in payload.documents]
+    docs = []
+    for doc in payload.documents:
+        d = doc.model_dump()
+        d["metadata"] = {
+            "title": doc.title,
+            "authors": doc.authors,
+            "year": doc.year,
+            **doc.metadata,
+        }
+        docs.append(d)
     return ingest_documents(docs)
 
 
@@ -165,5 +179,22 @@ def query(payload: QueryRequest) -> dict[str, Any]:
         "answer": answer,
         "sources": results,
     }
+
+@app.post("/upload")
+def upload_pdf(
+    file: UploadFile = File(...),
+    title: str = Form(default=""),
+    authors: str = Form(default=""),
+    year: int | None = Form(default=None),
+) -> dict:
+    if file.filename is None:
+        return {"error": "ファイル名が取得できませんでした"}
+
+    reader = pypdf.PdfReader(file.file)
+    text = "\n".join(page.extract_text() for page in reader.pages)
+
+    doc_id = file.filename.removesuffix(".pdf")
+
+    return ingest_documents([{"id": doc_id, "text": text, "metadata": {}}])
 
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

@@ -45,7 +45,7 @@ def ingest_documents(documents: list[dict[str, Any]]) -> dict[str, int]:
     ids: list[str] = []
     embeddings: list[list[float]] = []
     texts: list[str] = []
-    metadatas: list[dict[str, Any]] = []
+    metadatas: list[dict[str, str | int | float | bool]] = []
 
     for doc in documents:
         doc_id = doc["id"]
@@ -54,15 +54,29 @@ def ingest_documents(documents: list[dict[str, Any]]) -> dict[str, int]:
         for i, chunk in enumerate(chunk_text(doc["text"])):
             ids.append(f"{doc_id}-{i}")
             texts.append(chunk)
-            metadatas.append({"doc_id": doc_id, **metadata})
+            cleaned_meta: dict[str, str | int | float | bool] = {
+                k: v for k, v in {**metadata, "doc_id": doc_id}.items()
+                if isinstance(v, (str, int, float, bool))
+            }
+            metadatas.append(cleaned_meta)
         
     if not ids:
         return {"documents": 0, "new_chunks": 0, "total_chunks": collection.count()}
 
-    vecs = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
+    # vecs = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
+    vecs = model.encode(
+        ["passage: " + t for t in texts],
+        normalize_embeddings=True,
+        show_progress_bar=False
+    )
     embeddings = [v.tolist() for v in vecs]
 
-    collection.upsert(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
+    collection.upsert(
+        ids=ids,
+        embeddings=embeddings, # type: ignore[arg-type]
+        documents=texts,
+        metadatas=metadatas, # type: ignore
+    )
 
     return {
         "documents": len(documents),
@@ -77,21 +91,24 @@ def retrieve(question: str, top_k: int = 3) -> list[dict[str, Any]]:
         return []
 
     model = get_embedder()
-    query_vec = model.encode(question, normalize_embeddings=True, show_progress_bar=False)
+    query_vec = model.encode(
+        "query: " + question, normalize_embeddings=True, show_progress_bar=False
+    )
 
     results = collection.query(
         query_embeddings=[query_vec.tolist()],
         n_results=top_k,
-        include=["documents", "metadatas", "distances"]
+        include=["documents", "metadatas", "distances"] # type: ignore[arg-type]
     )
 
     output: list[dict[str, Any]] = []
     for chunk_id, text, meta, distance in zip(
         results["ids"][0],
-        results["documents"][0],
-        results["metadatas"][0],
-        results["distances"][0],
+        results["documents"][0],  # type: ignore[index]
+        results["metadatas"][0],  # type: ignore[index]
+        results["distances"][0],  # type: ignore[index]
     ):
+
         output.append({
             "chunk_id": chunk_id,
             "text": text,
