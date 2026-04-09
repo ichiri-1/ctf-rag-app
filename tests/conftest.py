@@ -1,20 +1,22 @@
-# テスト用に一時ディレクトリを使用(data/chroma/に書き込まれないようにするため)
-
 import pytest
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("CHROMA_PERSIST_DIR", str(tmp_path / "chroma"))
-    monkeypatch.setenv("APP_DATA_DIR", str(tmp_path))
-
-    # settings と get_chroma_collection のキャッシュをリセット
-    from app import settings as settings_module
-    settings_module.settings = settings_module.Settings()
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
 
     import app.rag as rag_module
-    rag_module.get_chroma_collection.cache_clear()
+    import app.settings as settings_module
+    import app.writeup as writeup_module
+
+    new_settings = settings_module.Settings()
+    monkeypatch.setattr(settings_module, "settings", new_settings)
+    monkeypatch.setattr(rag_module, "settings", new_settings)
+    monkeypatch.setattr(writeup_module, "settings", new_settings)
+
+    rag_module._get_collection.cache_clear()
+    rag_module._openai_client.cache_clear()
 
     from app.main import app
     return TestClient(app)

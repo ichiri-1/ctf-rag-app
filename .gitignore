@@ -12,6 +12,8 @@ data/index.json
 .claude/settings.local.json
 .vscode/
 data/chroma/
+data/meta/
+data/writeups/
 
 frontend/main.js
 frontend/node_modules/

@@ -1,22 +1,15 @@
 [project]
-name = "paper-rag-template"
+name = "ctf-recall"
 version = "0.1.0"
-description = "Minimal shared dev environment for a simple local RAG app"
+description = "CTF特化RAGアプリ - 過去のWriteupから解法の方向性を思い出す"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115.0,<1.0.0",
   "uvicorn[standard]>=0.34.0,<1.0.0",
   "pydantic-settings>=2.8.0,<3.0.0",
-  "sentence-transformers>=3.4.1,<4.0.0",
-  "transformers>=4.49.0,<5.0.0",
-  "torch>=2.6.0,<3.0.0",
-  "numpy>=2.2.0,<3.0.0",
-  "orjson>=3.10.0,<4.0.0",
   "chromadb>=0.6.0,<1.0.0",
   "openai>=2.30.0",
-  "pypdf>=6.9.2",
-  "python-multipart>=0.0.22",
 ]
 
 [dependency-groups]
@@ -36,10 +29,3 @@ select = ["E", "F", "I"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
-[tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
