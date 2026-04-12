@@ -160,4 +160,4 @@ def generate_hint(payload: HintIn) -> dict[str, Any]:
     return hint
 
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
