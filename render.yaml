@@ -4,12 +4,15 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     port: 8000
+    healthCheckPath: /health
     envVars:
       - key: OPENAI_API_KEY
         sync: false
-      - key: DATA_DIR
-        value: /data
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
         sync: false
