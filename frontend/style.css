@@ -1,0 +1,118 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #fff;
+  color: #222;
+  font-family: sans-serif;
+  font-size: 14px;
+}
+
+header {
+  padding: 12px 20px;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+header h1 { font-size: 16px; }
+header span { color: #666; font-size: 12px; }
+
+nav {
+  display: flex;
+  gap: 0;
+  padding: 0 20px;
+  border-bottom: 1px solid #ccc;
+}
+nav button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #666;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 14px;
+}
+nav button.active { color: #222; border-bottom-color: #222; }
+nav button:hover  { color: #222; }
+
+.pane { display: none; padding: 20px; max-width: 960px; }
+.pane.active { display: block; }
+
+label { display: block; margin-bottom: 4px; font-size: 12px; color: #555; }
+input, select, textarea {
+  width: 100%;
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  margin-bottom: 14px;
+}
+textarea { resize: vertical; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: #888; }
+
+button {
+  padding: 6px 14px;
+  border: 1px solid #aaa;
+  background: #f4f4f4;
+  font-size: 14px;
+  cursor: pointer;
+}
+button:hover { background: #e8e8e8; }
+
+.filter-row { display: flex; gap: 12px; margin-bottom: 14px; align-items: flex-end; }
+.filter-row .form-group { margin-bottom: 0; flex: 1; }
+.row { display: flex; gap: 12px; }
+.col { flex: 1; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #ddd; }
+th { font-size: 12px; color: #666; font-weight: normal; }
+tr:hover td { background: #f8f8f8; cursor: pointer; }
+
+/* 詳細モーダル */
+#detail-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 20px;
+  overflow-y: auto;
+}
+#detail-modal > div {
+  background: #fff;
+  border: 1px solid #ccc;
+  width: 100%;
+  max-width: 800px;
+  padding: 20px;
+}
+#detail-modal > div > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+#modal-meta { color: #666; font-size: 12px; margin-bottom: 12px; }
+#modal-content {
+  background: #f8f8f8;
+  border: 1px solid #ddd;
+  padding: 20px;
+  line-height: 1.7;
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+/* コードブロック用 */
+#modal-content pre {
+  background: #eee;
+  padding: 10px;
+  overflow-x: auto;
+  font-family: monospace;
+}
+#modal-content code {
+  font-family: monospace;
+  font-size: 12px;
+}
+

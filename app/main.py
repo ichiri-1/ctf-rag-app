@@ -1,149 +1,163 @@
 from __future__ import annotations
 
-from functools import lru_cache
+import json
 from typing import Any
 
-import torch
-from fastapi import FastAPI
-from pydantic import BaseModel, Field
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
-from app.rag import ingest_documents, retrieve
+from app.rag import _openai_client, search
 from app.settings import settings
+from app.writeup import create, delete, get, list_writeups
 
-app = FastAPI(title="paper-rag-template", version="0.1.0")
-
-class DocumentIn(BaseModel):
-    id: str = Field(..., description="Document identifier")
-    text: str = Field(..., description="Raw document text")
-    metadata: dict[str, Any] = Field(default_factory=dict)
+app = FastAPI(title="CTF Recall", version="0.1.0")
 
 
-class IngestRequest(BaseModel):
-    documents: list[DocumentIn]
+# --- リクエストモデル ---
+
+class WriteupIn(BaseModel):
+    title: str
+    ctf_name: str
+    category: str
+    tags: list[str]
+    markdown_content: str
 
 
-class QueryRequest(BaseModel):
-    question: str
-    top_k: int | None = None
+class SearchIn(BaseModel):
+    query_text: str
+    notes: str = ""
 
 
-@lru_cache(maxsize=1)
-def get_tokenizer() -> Any:
-    tokenizer = AutoTokenizer.from_pretrained(settings.generation_model)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    return tokenizer
-
-@lru_cache(maxsize=1)
-def get_generator() -> Any:
-    return AutoModelForCausalLM.from_pretrained(settings.generation_model)
+class HintIn(BaseModel):
+    query_text: str
+    notes: str = ""
+    retrieved_ids: list[str]
 
 
-def build_context(results: list[dict[str, Any]]) -> str:
-    if not results:
-        return "No context found."
-
-    lines = []
-    for item in results:
-        lines.append(f"[{item['chunk_id']}] {item['text']}")
-    return "\n".join(lines)
-
-
-def fallback_answer(question: str, results: list[dict[str, Any]]) -> str:
-    if not results:
-        return "関連する文書がまだありません。先に /ingest で文書を登録してください。"
-
-    context = build_context(results)
-    return (
-        "生成モデルを使わずに、取得コンテキストをそのまま返します。\n\n"
-        f"質問:\n{question}\n\n"
-        f"取得コンテキスト:\n{context}"
-    )
-
-def postprocess_answer(text: str) -> str:
-    text = text.strip()
-
-    stop_markers = [
-        "質問:",
-        "コンテキスト:",
-        "文書:",
-        "回答例:",
-        "###",
-    ]
-    for marker in stop_markers:
-        if marker in text:
-            text = text.split(marker)[0].strip()
-
-    return text
-
-def generate_answer(question: str, results: list[dict[str, Any]]) -> str:
-    if not results:
-        return fallback_answer(question, results)
-
-    context = build_context(results)
-
-    prompt = f"""以下の文書だけを根拠に、日本語で2文以内で簡潔に答えてください。
-分からない場合は「分かりません」と答えてください。
-根拠に使った chunk_id を最後に1つ以上書いてください。
-
-質問:
-{question}
-
-文書:
-{context}
-
-回答:
-"""
-
-    tokenizer = get_tokenizer()
-    model = get_generator()
-
-    inputs = tokenizer(
-        prompt,
-        return_tensors="pt",
-        truncation=True,
-        max_length=768,
-    )
-
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=settings.max_new_tokens,
-            do_sample=False,
-            repetition_penalty=settings.repetition_penalty,
-            no_repeat_ngram_size=settings.no_repeat_ngram,
-            pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-        )
-
-    generated_tokens = outputs[0][inputs["input_ids"].shape[1]:]
-    answer = tokenizer.decode(generated_tokens, skip_special_tokens=True).strip()
-    answer = postprocess_answer(answer)
-
-    if not answer:
-        return fallback_answer(question, results)
-
-    return answer
-
+# --- ヘルス ---
 
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/ingest")
-def ingest(payload: IngestRequest) -> dict[str, int]:
-    docs = [doc.model_dump() for doc in payload.documents]
-    return ingest_documents(docs)
+# --- Writeup CRUD ---
+
+@app.post("/api/writeups")
+def create_writeup(payload: WriteupIn) -> dict[str, str]:
+    writeup_id = create(
+        title=payload.title,
+        ctf_name=payload.ctf_name,
+        category=payload.category,
+        tags=payload.tags,
+        markdown_content=payload.markdown_content,
+    )
+    return {"id": writeup_id, "message": "created"}
 
 
-@app.post("/query")
-def query(payload: QueryRequest) -> dict[str, Any]:
-    top_k = payload.top_k or settings.retrieval_top_k
-    results = retrieve(payload.question, top_k)
-    answer = generate_answer(payload.question, results)
-    return {
-        "answer": answer,
-        "sources": results,
-    }
+# NOTE: /api/writeups/list を /{writeup_id} より先に定義する（FastAPI のルート順序）
+@app.get("/api/writeups/list")
+def list_writeups_endpoint(
+    category: str | None = None,
+    q: str | None = None,
+) -> list[dict[str, Any]]:
+    return list_writeups(category=category, q=q)
+
+
+@app.get("/api/writeups/{writeup_id}")
+def get_writeup(writeup_id: str) -> dict[str, Any]:
+    result = get(writeup_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Writeup not found")
+    return result
+
+
+@app.delete("/api/writeups/{writeup_id}")
+def delete_writeup(writeup_id: str) -> dict[str, str]:
+    if not delete(writeup_id):
+        raise HTTPException(status_code=404, detail="Writeup not found")
+    return {"message": "deleted"}
+
+
+# --- 検索 ---
+
+@app.post("/api/search")
+def search_writeups(payload: SearchIn) -> dict[str, Any]:
+    results = search(query_text=payload.query_text, notes=payload.notes)
+
+    from app.writeup import _load_index
+    index = {e["id"]: e for e in _load_index()}
+
+    enriched = []
+    for r in results:
+        entry = index.get(r["id"], {})
+        enriched.append({
+            "id": r["id"],
+            "title": r["title"],
+            "category": r["category"],
+            "tags": entry.get("tags", []),
+            "summary": entry.get("summary", ""),
+            "distance": r["distance"],
+        })
+
+    return {"results": enriched}
+
+
+# --- ヒント生成 ---
+
+_HINT_SYSTEM_PROMPT = """\
+あなたは CTF の解法想起を助けるアシスタントです。
+過去の類似 Writeup を参考に、現在の問題に対する短いヒントを JSON 形式で返してください。
+
+出力形式（必ずこの JSON のみ）:
+{
+  "common_points": ["..."],
+  "suspicious_methods": ["..."],
+  "next_actions": ["..."]
+}
+
+- common_points: 過去問と現在の問題の共通パターン（2〜3件）
+- suspicious_methods: 疑うべき攻撃・解析手法（3〜5件）
+- next_actions: 今すぐ試すべき具体的なアクション（3〜5件）
+長文不要。箇条書きで簡潔に。"""
+
+
+@app.post("/api/hint")
+def generate_hint(payload: HintIn) -> dict[str, Any]:
+    writeup_contents = []
+    for wid in payload.retrieved_ids:
+        entry = get(wid)
+        if entry:
+            writeup_contents.append(
+                f"### {entry['title']} ({entry['category']})\n{entry['markdown_content'][:1000]}"
+            )
+
+    if not writeup_contents:
+        raise HTTPException(status_code=400, detail="有効な Writeup が見つかりません")
+
+    user_message = (
+        f"現在の問題:\n{payload.query_text}\n\n"
+        f"メモ:\n{payload.notes}\n\n"
+        f"参考にする過去の Writeup:\n" + "\n\n".join(writeup_contents)
+    )
+
+    response = _openai_client().chat.completions.create(
+        model=settings.openai_chat_model,
+        messages=[
+            {"role": "system", "content": _HINT_SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
+        ],
+        response_format={"type": "json_object"},
+    )
+
+    content = response.choices[0].message.content or "{}"
+    try:
+        hint = json.loads(content)
+    except json.JSONDecodeError:
+        hint = {"common_points": [], "suspicious_methods": [], "next_actions": [content]}
+
+    return hint
+
+
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

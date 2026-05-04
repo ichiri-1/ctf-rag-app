@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTF Recall</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+      --red: #f85149;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 18px; color: var(--accent); }
+    header span { color: var(--muted); font-size: 12px; }
+
+    nav {
+      display: flex;
+      gap: 4px;
+      padding: 12px 24px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    nav button {
+      background: none;
+      border: none;
+      color: var(--muted);
+      padding: 8px 16px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      font-size: 14px;
+    }
+    nav button.active { color: var(--text); border-bottom-color: var(--accent); }
+    nav button:hover { color: var(--text); }
+
+    .pane { display: none; padding: 24px; max-width: 960px; }
+    .pane.active { display: block; }
+
+    .form-group { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
+    input, select, textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    textarea { resize: vertical; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+
+    .btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: var(--accent); color: #0d1117; font-weight: 600; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-danger:hover { opacity: 0.85; }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-size: 12px; font-weight: 500; }
+    tr:hover td { background: var(--surface); cursor: pointer; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-right: 4px; }
+    .badge-category { background: #1f3a5f; color: var(--accent); }
+    .badge-tag { background: #1a2d1a; color: var(--green); }
+
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .result-card h3 { font-size: 15px; margin-bottom: 6px; }
+    .result-meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .result-summary { font-size: 13px; color: var(--muted); }
+    .distance-badge {
+      float: right;
+      background: #1a2d1a;
+      color: var(--green);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .hint-section {
+      margin-top: 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .hint-section h2 { font-size: 15px; margin-bottom: 16px; color: var(--accent); }
+    .hint-block { margin-bottom: 16px; }
+    .hint-block h3 { font-size: 12px; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .hint-block ul { list-style: none; }
+    .hint-block li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .hint-block li::before { content: "▸ "; color: var(--accent); }
+
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 100;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px 24px;
+      overflow-y: auto;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 860px;
+    }
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h2 { font-size: 16px; }
+    .modal-body { padding: 20px; }
+    .modal-meta { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+    .modal-content {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      white-space: pre-wrap;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+
+    .filter-row { display: flex; gap: 12px; margin-bottom: 16px; align-items: flex-end; }
+    .filter-row .form-group { margin-bottom: 0; flex: 1; }
+    .row { display: flex; gap: 12px; }
+    .col { flex: 1; }
+
+    .msg { padding: 12px; border-radius: 6px; margin-bottom: 16px; font-size: 13px; }
+    .msg-success { background: #1a2d1a; color: var(--green); border: 1px solid var(--green); }
+    .msg-error { background: #2d1a1a; color: var(--red); border: 1px solid var(--red); }
+    .loading { color: var(--muted); font-size: 13px; padding: 12px 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>CTF Recall</h1>
+  <span>過去の Writeup から解法の方向性を思い出す</span>
+</header>
+
+<nav>
+  <button class="active" onclick="switchTab('writeups')">Writeup 一覧</button>
+  <button onclick="switchTab('register')">登録</button>
+  <button onclick="switchTab('search')">検索 / ヒント</button>
+</nav>
+
+<!-- Writeup 一覧 -->
+<div id="pane-writeups" class="pane active">
+  <div class="filter-row">
+    <div class="form-group">
+      <label>キーワード検索</label>
+      <input type="text" id="filter-q" placeholder="タイトル・CTF名・タグ" oninput="loadWriteups()">
+    </div>
+    <div class="form-group" style="max-width:180px">
+      <label>カテゴリ</label>
+      <select id="filter-category" onchange="loadWriteups()">
+        <option value="">すべて</option>
+        <option>crypto</option><option>web</option><option>pwn</option>
+        <option>rev</option><option>forensics</option><option>misc</option>
+      </select>
+    </div>
+  </div>
+  <div id="writeups-container"><p class="loading">読み込み中...</p></div>
+</div>
+
+<!-- 登録 -->
+<div id="pane-register" class="pane">
+  <div id="register-msg"></div>
+  <div class="row">
+    <div class="col">
+      <div class="form-group">
+        <label>タイトル *</label>
+        <input type="text" id="reg-title" placeholder="XOR and Image Mystery">
+      </div>
+    </div>
+    <div class="col">
+      <div class="form-group">
+        <label>CTF 名 *</label>
+        <input type="text" id="reg-ctf" placeholder="picoCTF 2025">
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col">
+      <div class="form-group">
+        <label>カテゴリ *</label>
+        <select id="reg-category">
+          <option value="">選択してください</option>
+          <option>crypto</option><option>web</option><option>pwn</option>
+          <option>rev</option><option>forensics</option><option>misc</option>
+        </select>
+      </div>
+    </div>
+    <div class="col">
+      <div class="form-group">
+        <label>タグ（カンマ区切り）</label>
+        <input type="text" id="reg-tags" placeholder="xor, png, image">
+      </div>
+    </div>
+  </div>
+  <div class="form-group">
+    <label>Markdown 本文 *</label>
+    <textarea id="reg-content" rows="20"
+      placeholder="## Problem&#10;問題の説明...&#10;&#10;## Approach&#10;アプローチ...&#10;&#10;## Solution&#10;解法..."></textarea>
+  </div>
+  <button class="btn btn-primary" onclick="registerWriteup()">登録する</button>
+</div>
+
+<!-- 検索 / ヒント -->
+<div id="pane-search" class="pane">
+  <div class="form-group">
+    <label>問題文 / 状況説明</label>
+    <textarea id="search-query" rows="4"
+      placeholder="壊れた PNG が与えられた。バイナリエディタで開くとヘッダが正しくない..."></textarea>
+  </div>
+  <div class="form-group">
+    <label>現在のメモ（任意）</label>
+    <input type="text" id="search-notes" placeholder="ヘッダ破損かXORっぽい">
+  </div>
+  <button class="btn btn-primary" onclick="doSearch()" style="margin-bottom:24px">類似問題を検索</button>
+  <div id="search-results"></div>
+  <div id="hint-area"></div>
+</div>
+
+<!-- 詳細モーダル -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title"></h2>
+      <button class="btn btn-secondary" onclick="closeModal()">✕ 閉じる</button>
+    </div>
+    <div class="modal-body">
+      <div id="modal-meta" class="modal-meta"></div>
+      <pre id="modal-content" class="modal-content"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+  function switchTab(name) {
+    document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById('pane-' + name).classList.add('active');
+    ['writeups', 'register', 'search'].forEach((n, i) => {
+      if (n === name) document.querySelectorAll('nav button')[i].classList.add('active');
+    });
+    if (name === 'writeups') loadWriteups();
+  }
+
+  async function loadWriteups() {
+    const q = document.getElementById('filter-q').value;
+    const category = document.getElementById('filter-category').value;
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (category) params.set('category', category);
+    const container = document.getElementById('writeups-container');
+    container.innerHTML = '<p class="loading">読み込み中...</p>';
+    try {
+      const res = await fetch('/api/writeups/list?' + params);
+      renderWriteupsList(await res.json());
+    } catch {
+      container.innerHTML = '<p class="msg msg-error">読み込みエラー</p>';
+    }
+  }
+
+  function renderWriteupsList(items) {
+    const container = document.getElementById('writeups-container');
+    if (!items.length) {
+      container.innerHTML = '<p style="color:var(--muted)">Writeup がありません。「登録」タブから追加してください。</p>';
+      return;
+    }
+    const rows = items.map(item => `
+      <tr onclick="openDetail('${esc(item.id)}')">
+        <td>${esc(item.title)}</td>
+        <td>${esc(item.ctf_name)}</td>
+        <td><span class="badge badge-category">${esc(item.category)}</span></td>
+        <td>${(item.tags||[]).map(t=>`<span class="badge badge-tag">${esc(t)}</span>`).join('')}</td>
+        <td style="color:var(--muted)">${(item.created_at||'').slice(0,10)}</td>
+        <td>
+          <button class="btn btn-danger" style="padding:4px 10px;font-size:12px"
+            onclick="event.stopPropagation();deleteWriteup('${esc(item.id)}')">削除</button>
+        </td>
+      </tr>`).join('');
+    container.innerHTML = `
+      <table>
+        <thead><tr><th>タイトル</th><th>CTF名</th><th>カテゴリ</th><th>タグ</th><th>日付</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  async function openDetail(id) {
+    try {
+      const data = await fetch(`/api/writeups/${id}`).then(r => r.json());
+      document.getElementById('modal-title').textContent = data.title;
+      document.getElementById('modal-meta').innerHTML =
+        `<span class="badge badge-category">${esc(data.category)}</span>
+         ${(data.tags||[]).map(t=>`<span class="badge badge-tag">${esc(t)}</span>`).join('')}
+         &nbsp;${esc(data.ctf_name)}&nbsp;·&nbsp;${(data.created_at||'').slice(0,10)}`;
+      document.getElementById('modal-content').textContent = data.markdown_content;
+      document.getElementById('detail-modal').classList.add('open');
+    } catch { alert('詳細の取得に失敗しました'); }
+  }
+
+  function closeModal() {
+    document.getElementById('detail-modal').classList.remove('open');
+  }
+  document.getElementById('detail-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+
+  async function deleteWriteup(id) {
+    if (!confirm('このWriteupを削除しますか？')) return;
+    await fetch(`/api/writeups/${id}`, { method: 'DELETE' });
+    loadWriteups();
+  }
+
+  async function registerWriteup() {
+    const title    = document.getElementById('reg-title').value.trim();
+    const ctf_name = document.getElementById('reg-ctf').value.trim();
+    const category = document.getElementById('reg-category').value;
+    const tags     = document.getElementById('reg-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+    const markdown_content = document.getElementById('reg-content').value.trim();
+    const msgEl = document.getElementById('register-msg');
+
+    if (!title || !ctf_name || !category || !markdown_content) {
+      msgEl.innerHTML = '<p class="msg msg-error">必須項目（タイトル・CTF名・カテゴリ・本文）を入力してください</p>';
+      return;
+    }
+    msgEl.innerHTML = '<p class="loading">登録中...</p>';
+    try {
+      const res = await fetch('/api/writeups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, ctf_name, category, tags, markdown_content }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        msgEl.innerHTML = `<p class="msg msg-success">登録しました（ID: ${esc(data.id)}）</p>`;
+        ['reg-title','reg-ctf','reg-tags','reg-content'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('reg-category').value = '';
+      } else {
+        msgEl.innerHTML = `<p class="msg msg-error">エラー: ${JSON.stringify(data)}</p>`;
+      }
+    } catch {
+      msgEl.innerHTML = '<p class="msg msg-error">通信エラーが発生しました</p>';
+    }
+  }
+
+  let lastResults = [];
+
+  async function doSearch() {
+    const query_text = document.getElementById('search-query').value.trim();
+    const notes      = document.getElementById('search-notes').value.trim();
+    const resultsEl  = document.getElementById('search-results');
+    const hintEl     = document.getElementById('hint-area');
+
+    if (!query_text) {
+      resultsEl.innerHTML = '<p class="msg msg-error">問題文を入力してください</p>';
+      return;
+    }
+    resultsEl.innerHTML = '<p class="loading">検索中...</p>';
+    hintEl.innerHTML = '';
+
+    try {
+      const res = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query_text, notes }),
+      });
+      lastResults = (await res.json()).results || [];
+      renderSearchResults(lastResults);
+    } catch {
+      resultsEl.innerHTML = '<p class="msg msg-error">検索エラーが発生しました</p>';
+    }
+  }
+
+  function renderSearchResults(results) {
+    const el = document.getElementById('search-results');
+    if (!results.length) {
+      el.innerHTML = '<p style="color:var(--muted)">類似する Writeup が見つかりませんでした。</p>';
+      return;
+    }
+    const cards = results.map(r => `
+      <div class="result-card">
+        <span class="distance-badge">距離 ${r.distance.toFixed(3)}</span>
+        <h3 onclick="openDetail('${esc(r.id)}')" style="cursor:pointer;color:var(--accent)">${esc(r.title)}</h3>
+        <div class="result-meta">
+          <span class="badge badge-category">${esc(r.category)}</span>
+          ${(r.tags||[]).map(t=>`<span class="badge badge-tag">${esc(t)}</span>`).join('')}
+        </div>
+        <p class="result-summary">${esc(r.summary)}</p>
+      </div>`).join('');
+    el.innerHTML = `
+      <p style="color:var(--muted);margin-bottom:12px">${results.length} 件の類似 Writeup</p>
+      ${cards}
+      <button class="btn btn-secondary" style="margin-top:8px" onclick="generateHint()">
+        これらを参考にヒントを生成
+      </button>`;
+  }
+
+  async function generateHint() {
+    const query_text    = document.getElementById('search-query').value.trim();
+    const notes         = document.getElementById('search-notes').value.trim();
+    const retrieved_ids = lastResults.map(r => r.id);
+    const hintEl        = document.getElementById('hint-area');
+
+    hintEl.innerHTML = '<p class="loading">ヒント生成中...</p>';
+    try {
+      const res = await fetch('/api/hint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query_text, notes, retrieved_ids }),
+      });
+      renderHint(await res.json());
+    } catch {
+      hintEl.innerHTML = '<p class="msg msg-error">ヒント生成エラーが発生しました</p>';
+    }
+  }
+
+  function renderHint(hint) {
+    document.getElementById('hint-area').innerHTML = `
+      <div class="hint-section">
+        <h2>ヒント</h2>
+        <div class="hint-block">
+          <h3>共通点</h3>
+          <ul>${(hint.common_points||[]).map(p=>`<li>${esc(p)}</li>`).join('')}</ul>
+        </div>
+        <div class="hint-block">
+          <h3>疑うべき手法</h3>
+          <ul>${(hint.suspicious_methods||[]).map(m=>`<li>${esc(m)}</li>`).join('')}</ul>
+        </div>
+        <div class="hint-block">
+          <h3>次に試すこと</h3>
+          <ul>${(hint.next_actions||[]).map(a=>`<li>${esc(a)}</li>`).join('')}</ul>
+        </div>
+      </div>`;
+  }
+
+  function esc(str) {
+    return String(str||'')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  loadWriteups();
+</script>
+</body>
+</html>

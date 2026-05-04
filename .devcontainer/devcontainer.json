@@ -9,7 +9,7 @@
       "version": "lts"
     }
   },
-  "postCreateCommand": "uv sync --dev && npm install -g @anthropic-ai/claude-code",
+  "postCreateCommand": "uv sync --dev && npm install -g @anthropic-ai/claude-code && npm install",
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
   "customizations": {
