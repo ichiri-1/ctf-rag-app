@@ -1,102 +1,122 @@
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from typing import Any
 
-import chromadb
-from sentence_transformers import SentenceTransformer
+from openai import OpenAI
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 
 from app.settings import settings
 
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 80) -> list[str]:
-    text = " ".join(text.split())
-    if not text:
-        return []
-
-    chunks: list[str] = []
-    start = 0
-    while start < len(text):
-        end = min(start + chunk_size, len(text))
-        chunks.append(text[start:end])
-        if end == len(text):
-            break
-        start = max(0, end - overlap)
-    return chunks
-
+@lru_cache(maxsize=1)
+def _openai_client() -> OpenAI:
+    return OpenAI(api_key=settings.openai_api_key.get_secret_value())
 
 @lru_cache(maxsize=1)
-def get_embedder() -> SentenceTransformer:
-    return SentenceTransformer(settings.embedding_model)
+def _qdrant_client() -> QdrantClient:
+    return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key.get_secret_value())
 
-@lru_cache(maxsize=1)
-def get_chroma_collection() -> chromadb.Collection:
-    client = chromadb.PersistentClient(path=str(settings.chroma_persist_dir))
-    return client.get_or_create_collection(
-        name=settings.chroma_collection,
-        metadata={"hnsw:space": "cosine"},
 
+def _embed(texts: list[str]) -> list[list[float]]:
+    resp = _openai_client().embeddings.create(
+        model=settings.openai_embedding_model,
+        input=texts,
     )
+    return [item.embedding for item in resp.data]
 
-def ingest_documents(documents: list[dict[str, Any]]) -> dict[str, int]:
-    collection = get_chroma_collection()
-    model = get_embedder()
+def _ensure_collection() -> None:
+    client = _qdrant_client()
+    existing = [c.name for c in client.get_collections().collections]
+    if settings.qdrant_collection not in existing:
+        client.create_collection(
+            collection_name=settings.qdrant_collection,
+            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+        )
+
+
+def chunk_markdown(content: str) -> list[str]:
+    """## ヘッダー単位で Markdown をチャンク分割する。frontmatter は除去する"""
+    body = re.sub(r"^---\n.*?\n---\n?", "", content, flags=re.DOTALL).strip()
+    if not body:
+        return []
     
-    ids: list[str] = []
-    embeddings: list[list[float]] = []
-    texts: list[str] = []
-    metadatas: list[dict[str, Any]] = []
-
-    for doc in documents:
-        doc_id = doc["id"]
-        metadata = doc.get("metadata", {})
-
-        for i, chunk in enumerate(chunk_text(doc["text"])):
-            ids.append(f"{doc_id}-{i}")
-            texts.append(chunk)
-            metadatas.append({"doc_id": doc_id, **metadata})
-        
-    if not ids:
-        return {"documents": 0, "new_chunks": 0, "total_chunks": collection.count()}
-
-    vecs = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
-    embeddings = [v.tolist() for v in vecs]
-
-    collection.upsert(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
-
-    return {
-        "documents": len(documents),
-        "new_chunks": len(ids),
-        "total_chunks": collection.count(),
-    }
+    sections = re.split(r"(?=^## )", body, flags=re.MULTILINE)
+    return [s.strip() for s in sections if s.strip()]
 
 
-def retrieve(question: str, top_k: int = 3) -> list[dict[str, Any]]:
-    collection = get_chroma_collection()
-    if collection.count() == 0:
-        return []
-
-    model = get_embedder()
-    query_vec = model.encode(question, normalize_embeddings=True, show_progress_bar=False)
-
-    results = collection.query(
-        query_embeddings=[query_vec.tolist()],
-        n_results=top_k,
-        include=["documents", "metadatas", "distances"]
+def add_writeup(writeup_id: str, chunks: list[str], title: str, category: str) -> None:
+    """Writeup のチャンクを qdrant に追加する"""
+    if not chunks:
+        return
+    
+    _ensure_collection()
+    embeddings = _embed(chunks)
+    point = [
+        PointStruct(
+            id = abs(hash(f"{writeup_id}_{i}")) % (2**63),
+            vector=emb,
+            payload={
+                "writeup_id": writeup_id,
+                "title": title,
+                "category": category,
+                "chunk_index": i,
+                "text": chunk,
+            },
+        )
+        for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
+    ]
+    _qdrant_client().upsert(
+        collection_name=settings.qdrant_collection,
+        points=point,
     )
 
-    output: list[dict[str, Any]] = []
-    for chunk_id, text, meta, distance in zip(
-        results["ids"][0],
-        results["documents"][0],
-        results["metadatas"][0],
-        results["distances"][0],
-    ):
-        output.append({
-            "chunk_id": chunk_id,
-            "text": text,
-            "metadata": meta,
-            "score": 1 - distance,  # コサイン距離 → 類似度に変換
-        })
+def delete_writeup(writeup_id: str) -> None:
+    """writeup_id に紐づく全チャンクを qdrant から削除する"""
 
-    return output
+    _qdrant_client().delete(
+        collection_name=settings.qdrant_collection,
+        points_selector=Filter(
+            must=[FieldCondition(key="writeup_id", match=MatchValue(value=writeup_id))]
+        ),
+    )
+
+
+def search(query_text: str, notes: str = "", k: int | None = None) -> list[dict[str, Any]]:
+    """クエリに類似する Writeup を返す。writeup 単位で集約する"""
+    
+    _ensure_collection()
+    top_k = k or settings.retrieval_top_k
+    combined_query = f"{query_text}\n{notes}".strip()
+    query_vec = _embed([combined_query])[0]
+
+    results = _qdrant_client().query_points(
+        collection_name=settings.qdrant_collection,
+        query=query_vec,
+        limit=top_k*3,
+        with_payload=True,
+    )
+
+    # writeup_id ごとに最小 distance で集約
+    best: dict[str, dict[str, Any]] = {}
+    for hit in results.points:
+        payload = hit.payload or {}
+        wid = payload.get("writeup_id", "")
+        score = hit.score # コサイン類似度
+        if wid not in best or score > best[wid]["distance"]:
+            best[wid] = {
+                "id": wid,
+                "title": payload.get("title", ""),
+                "category": payload.get("category", ""),
+                "distance": score,
+            }
+    return sorted(best.values(), key=lambda x: x["distance"], reverse=True)[:top_k]

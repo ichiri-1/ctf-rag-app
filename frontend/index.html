@@ -1,36 +1,101 @@
-<!-- 登録フォーム -->
 <!DOCTYPE html>
 <html lang="ja">
-    <head>
-        <meta charset="UTF-8" />
-        <title>RAG デモ</title>
-        <link rel="stylesheet" href="style.css" />
-    </head>
-    <body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CTF Recall</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-        <h1>RAG デモ</h1>
+<header>
+  <h1>CTF Recall</h1>
+  <span>過去の Writeup から解法の方向性を思い出す</span>
+</header>
 
-        <!-- 文書登録フォーム -->
-        <section>
-            <h2>文書を登録する</h2>
-            <form id="ingest-form">
-                <label>ID  <input type="text" id="doc-id" required /></label>
-                <label>テキスト <textarea id="doc-text" required></textarea></label>
-                <button type="submit">登録</button>
-            </form>
-            <p id="ingest-result"></p>
-        </section>
+<nav>
+  <button class="active" onclick="switchTab('writeups')">Writeup 一覧</button>
+  <button onclick="switchTab('register')">登録</button>
+  <button onclick="switchTab('search')">検索 / ヒント</button>
+</nav>
 
-        <!-- 質問フォーム -->
-        <section>
-            <h2>質問する</h2>
-            <form id="query-form">
-                <label>質問 <input type="text" id="question" required /></label>
-                <button type="submit">送信</button>
-            </form>
-            <div id="answer"></div>
-        </section>
+<!-- Writeup 一覧 -->
+<div id="pane-writeups" class="pane active">
+  <div class="filter-row">
+    <div class="form-group">
+      <label>キーワード検索</label>
+      <input type="text" id="filter-q" placeholder="タイトル・CTF名・タグ" oninput="loadWriteups()">
+    </div>
+    <div class="form-group">
+      <label>カテゴリ</label>
+      <select id="filter-category" onchange="loadWriteups()">
+        <option value="">すべて</option>
+        <option>crypto</option><option>web</option><option>pwn</option>
+        <option>rev</option><option>forensics</option><option>misc</option>
+      </select>
+    </div>
+  </div>
+  <div id="writeups-container"><p>読み込み中...</p></div>
+</div>
 
-        <script type="module" src="main.js"></script>
-    </body>
+<!-- 登録 -->
+<div id="pane-register" class="pane">
+  <div id="register-msg"></div>
+  <div class="row">
+    <div class="col">
+      <label>タイトル *</label>
+      <input type="text" id="reg-title" placeholder="XOR and Image Mystery">
+    </div>
+    <div class="col">
+      <label>CTF 名 *</label>
+      <input type="text" id="reg-ctf" placeholder="picoCTF 2025">
+    </div>
+  </div>
+  <div class="row">
+    <div class="col">
+      <label>カテゴリ *</label>
+      <select id="reg-category">
+        <option value="">選択してください</option>
+        <option>crypto</option><option>web</option><option>pwn</option>
+        <option>rev</option><option>forensics</option><option>misc</option>
+      </select>
+    </div>
+    <div class="col">
+      <label>タグ（カンマ区切り）</label>
+      <input type="text" id="reg-tags" placeholder="xor, png, image">
+    </div>
+  </div>
+  <label>Markdown 本文 *</label>
+  <textarea id="reg-content" rows="20"
+    placeholder="## Problem&#10;問題の説明...&#10;&#10;## Approach&#10;アプローチ...&#10;&#10;## Solution&#10;解法..."></textarea>
+  <button onclick="registerWriteup()">登録する</button>
+</div>
+
+<!-- 検索 / ヒント -->
+<div id="pane-search" class="pane">
+  <label>問題文 / 状況説明</label>
+  <textarea id="search-query" rows="4"
+    placeholder="壊れた PNG が与えられた。バイナリエディタで開くとヘッダが正しくない..."></textarea>
+  <label>現在のメモ（任意）</label>
+  <input type="text" id="search-notes" placeholder="ヘッダ破損かXORっぽい">
+  <button onclick="doSearch()">類似問題を検索</button>
+  <div id="search-results"></div>
+  <div id="hint-area"></div>
+</div>
+
+<!-- 詳細モーダル -->
+<div id="detail-modal" style="display:none">
+  <div>
+    <div>
+      <h2 id="modal-title"></h2>
+      <button onclick="closeModal()">閉じる</button>
+    </div>
+    <div id="modal-meta"></div>
+    <pre id="modal-content"></pre>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+<script type="module" src="main.js"></script>
+</body>
 </html>
