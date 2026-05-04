@@ -15,6 +15,5 @@ data/chroma/
 data/meta/
 data/writeups/
 
-frontend/main.js
 frontend/node_modules/
 frontend/data/
