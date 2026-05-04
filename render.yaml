@@ -6,10 +6,10 @@ services:
     port: 8000
     envVars:
       - key: OPENAI_API_KEY
-        sync: false  # Render ダッシュボードで手動設定
+        sync: false
       - key: DATA_DIR
         value: /data
-    disk:
-      name: chroma-data
-      mountPath: /data
-      sizeGB: 1
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

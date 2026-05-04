@@ -4,8 +4,16 @@ import re
 from functools import lru_cache
 from typing import Any
 
-import chromadb
 from openai import OpenAI
+from qdrant_client import QdrantClient
+from qdrant_client.models import (
+    Distance,
+    FieldCondition,
+    Filter,
+    MatchValue,
+    PointStruct,
+    VectorParams,
+)
 
 from app.settings import settings
 
@@ -14,6 +22,10 @@ from app.settings import settings
 def _openai_client() -> OpenAI:
     return OpenAI(api_key=settings.openai_api_key.get_secret_value())
 
+@lru_cache(maxsize=1)
+def _qdrant_client() -> QdrantClient:
+    return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key.get_secret_value())
+
 
 def _embed(texts: list[str]) -> list[list[float]]:
     resp = _openai_client().embeddings.create(
@@ -21,6 +33,15 @@ def _embed(texts: list[str]) -> list[list[float]]:
         input=texts,
     )
     return [item.embedding for item in resp.data]
+
+def _ensure_collection() -> None:
+    client = _qdrant_client()
+    existing = [c.name for c in client.get_collections().collections]
+    if settings.qdrant_collection not in existing:
+        client.create_collection(
+            collection_name=settings.qdrant_collection,
+            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+        )
 
 
 def chunk_markdown(content: str) -> list[str]:
@@ -33,81 +54,69 @@ def chunk_markdown(content: str) -> list[str]:
     return [s.strip() for s in sections if s.strip()]
 
 
-@lru_cache(maxsize=1)
-def _get_collection() -> chromadb.Collection:
-    settings.chroma_dir.mkdir(parents=True, exist_ok=True)
-    client = chromadb.PersistentClient(path=str(settings.chroma_dir))
-    return client.get_or_create_collection(
-        name=settings.chroma_collection,
-        metadata={"hnsw:space": "cosine"},
-    )
-
-
 def add_writeup(writeup_id: str, chunks: list[str], title: str, category: str) -> None:
-    """Writeup のチャンクを ChromaDB に追加する"""
-
+    """Writeup のチャンクを qdrant に追加する"""
     if not chunks:
         return
     
-    collection = _get_collection()
+    _ensure_collection()
     embeddings = _embed(chunks)
-    collection.add(
-        ids=[f"{writeup_id}_chunk_{i}" for i in range(len(chunks))],
-        documents=chunks,
-        embeddings=embeddings, # type: ignore[arg-type]
-        metadatas=[
-            {"writeup_id": writeup_id, "title": title, "category": category, "chunk_index": i}
-            for i in range(len(chunks))
-        ],
+    point = [
+        PointStruct(
+            id = abs(hash(f"{writeup_id}_{i}")) % (2**63),
+            vector=emb,
+            payload={
+                "writeup_id": writeup_id,
+                "title": title,
+                "category": category,
+                "chunk_index": i,
+                "text": chunk,
+            },
+        )
+        for i, (chunk, emb) in enumerate(zip(chunks, embeddings))
+    ]
+    _qdrant_client().upsert(
+        collection_name=settings.qdrant_collection,
+        points=point,
     )
 
-
 def delete_writeup(writeup_id: str) -> None:
-    """writeup_id に紐づく全チャンクを ChromaDB から削除する"""
+    """writeup_id に紐づく全チャンクを qdrant から削除する"""
 
-    collection = _get_collection()
-    results = collection.get(where={"writeup_id": writeup_id})
-
-    if results["ids"]:
-        collection.delete(ids=results["ids"])
+    _qdrant_client().delete(
+        collection_name=settings.qdrant_collection,
+        points_selector=Filter(
+            must=[FieldCondition(key="writeup_id", match=MatchValue(value=writeup_id))]
+        ),
+    )
 
 
 def search(query_text: str, notes: str = "", k: int | None = None) -> list[dict[str, Any]]:
     """クエリに類似する Writeup を返す。writeup 単位で集約する"""
-
-    collection = _get_collection()
-
-    if collection.count() == 0:
-        return []
-
+    
+    _ensure_collection()
     top_k = k or settings.retrieval_top_k
     combined_query = f"{query_text}\n{notes}".strip()
     query_vec = _embed([combined_query])[0]
-    n_results = min(top_k * 3, collection.count())
 
-    results = collection.query(
-        query_embeddings=[query_vec],
-        n_results=n_results,
-        include=["documents", "metadatas", "distances"], # type: ignore[arg-type]
+    results = _qdrant_client().query_points(
+        collection_name=settings.qdrant_collection,
+        query=query_vec,
+        limit=top_k*3,
+        with_payload=True,
     )
 
     # writeup_id ごとに最小 distance で集約
     best: dict[str, dict[str, Any]] = {}
-    for _chunk_id, text, meta, distance in zip(
-        results["ids"][0],
-        results["documents"][0],  # type: ignore[index]
-        results["metadatas"][0],  # type: ignore[index]
-        results["distances"][0],  # type: ignore[index]
-    ):
-        wid = str(meta["writeup_id"])
-        if wid not in best or distance < best[wid]["distance"]:
+    for hit in results.points:
+        payload = hit.payload or {}
+        wid = payload.get("writeup_id", "")
+        score = hit.score # コサイン類似度
+        if wid not in best or score > best[wid]["distance"]:
             best[wid] = {
                 "id": wid,
-                "title": str(meta.get("title", "")),
-                "category": str(meta.get("category", "")),
-                "distance": float(distance),
-                "matched_chunk": text,
+                "title": payload.get("title", ""),
+                "category": payload.get("category", ""),
+                "distance": score,
             }
-
-    sorted_results = sorted(best.values(), key=lambda x: x["distance"])
-    return sorted_results[:top_k]
+    return sorted(best.values(), key=lambda x: x["distance"], reverse=True)[:top_k]

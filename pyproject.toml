@@ -8,8 +8,9 @@ dependencies = [
   "fastapi>=0.115.0,<1.0.0",
   "uvicorn[standard]>=0.34.0,<1.0.0",
   "pydantic-settings>=2.8.0,<3.0.0",
-  "chromadb>=0.6.0,<1.0.0",
   "openai>=2.30.0",
+  "supabase>=2.0.0,<3.0.0",
+  "qdrant-client>=1.9.0,<2.0.0",
 ]
 
 [dependency-groups]
